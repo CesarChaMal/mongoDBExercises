@@ -1,0 +1,237 @@
+     Download Studio 3T from
+https://studio3t.com/download/
+Request a student license from the company.
+Expect email with a license key from the company.
+Start up Studio 3T.
+In Studio 3T go to Help > License Manager > Import New License
+Copy and paste the license key from the email into the window and click OK.
+NOTE: You have to copy "the whole thing" not just the encrypted part. From --- to ---
+
+     Register the Server
+Wait for a user name and for password information from your professor. This is YET ANOTHER
+password.
+Click Connect
+Click New Connection
+Invent a name for your connection. How about mongo632?
+Your server is localhost.
+Then click on the Authentication tab.
+
+  EXPERIMENT WITH MAPREDUCE
+
+Map Reduce Example from
+
+docs.mongodb.com/manual/tutorial/map-reduce-examples/
+
+db.orders.insertMany([
+   { _id: 1, cust_id: "Ant O. Knee", ord_date: new Date("2020-03-01"), price: 25, items: [ { sku: "oranges", qty: 5, price: 2.5 }, { sku: "apples", qty: 5, price: 2.5 } ], status: "A" },
+   { _id: 2, cust_id: "Ant O. Knee", ord_date: new Date("2020-03-08"), price: 70, items: [ { sku: "oranges", qty: 8, price: 2.5 }, { sku: "chocolates", qty: 5, price: 10 } ], status: "A" },
+   { _id: 3, cust_id: "Busby Bee", ord_date: new Date("2020-03-08"), price: 50, items: [ { sku: "oranges", qty: 10, price: 2.5 }, { sku: "pears", qty: 10, price: 2.5 } ], status: "A" },
+   { _id: 4, cust_id: "Busby Bee", ord_date: new Date("2020-03-18"), price: 25, items: [ { sku: "oranges", qty: 10, price: 2.5 } ], status: "A" },
+   { _id: 5, cust_id: "Busby Bee", ord_date: new Date("2020-03-19"), price: 50, items: [ { sku: "chocolates", qty: 5, price: 10 } ], status: "A"},
+   { _id: 6, cust_id: "Cam Elot", ord_date: new Date("2020-03-19"), price: 35, items: [ { sku: "carrots", qty: 10, price: 1.0 }, { sku: "apples", qty: 10, price: 2.5 } ], status: "A" },
+   { _id: 7, cust_id: "Cam Elot", ord_date: new Date("2020-03-20"), price: 25, items: [ { sku: "oranges", qty: 10, price: 2.5 } ], status: "A" },
+   { _id: 8, cust_id: "Don Quis", ord_date: new Date("2020-03-20"), price: 75, items: [ { sku: "chocolates", qty: 5, price: 10 }, { sku: "apples", qty: 10, price: 2.5 } ], status: "A" },
+   { _id: 9, cust_id: "Don Quis", ord_date: new Date("2020-03-20"), price: 55, items: [ { sku: "carrots", qty: 5, price: 1.0 }, { sku: "apples", qty: 10, price: 2.5 }, { sku: "oranges", qty: 10, price: 2.5 } ], status: "A" },
+   { _id: 10, cust_id: "Don Quis", ord_date: new Date("2020-03-23"), price: 25, items: [ { sku: "oranges", qty: 10, price: 2.5 } ], status: "A" }
+])
+
+
+db.skudata.insertMany(
+  [{cust_id: "abc123",
+  status: 'A',
+  price: 25,
+  items: [ {"sku" : "mmm", "qty" : 5 , "price" : 2.5 },
+           {"sku" : "nnn", "qty" : 5, "price" : 2.5} ]},
+
+{cust_id: "def456",
+  status: 'A',
+  price: 30,
+  items: [ {"sku" : "mmm", "qty" : 6 , "price" : 3.0 },
+           {"sku" : "nnn", "qty" : 4, "price" : 3.0} ]},
+
+{cust_id: "abc123",
+  status: 'A',
+  price: 40,
+  items: [ {"sku" : "mmm", "qty" : 10 , "price" : 1 },
+           {"sku" : "nnn", "qty" : 10, "price" : 3} ]}])
+
+var mapFunction1 = function() {
+                              emit(this.cust_id, this.price);
+
+                         };
+
+var reduceFunction1 = function(keyCustId, valuesPrices) {
+                     return Array.sum(valuesPrices);
+
+};
+
+There are strict rules how the above two functions have to look. The use of “this” the parameter lists
+and the use of “emit” all have to be exactly like this. Array is a data type with an operation sum() that
+adds all the elements in the array.
+
+The following call uses the above two functions and determines where the result goes to. This invokes
+the hidden machinery of MapReduce.
+
+db.skudata.mapReduce( mapFunction1, reduceFunction1, {out: "mapreduceexample" } )
+
+Now do a Refresh All on your connection.
+
+You will see a new collection: mapreduceexample.
+Customer abc123 had two orders with prices: 25 and 40, which correctly adds up to 65.
+Customer def456 had one order with price: 30.
+
+Note that the prices that I used are not exactly the prices from the Mongo web site.
+
+     Mapreduce Example 2
+
+Note that the count is always “1”. We will be counting how many times we went through the loop.
+
+var mapFunction2 = function () {
+  for (var idx = 0; idx < this.items.length; idx++) {
+       var key = this.items[idx].sku;
+       var value = {count: 1, qty: this.items[idx].qty };
+      emit(key, value);
+  }
+};
+
+var reduceFunction2 = function(keySKU, countObjVals) {      # This adds 1 for each order
+    reduceVal = {count: 0, qty: 0};
+    for (var idx = 0; idx < countObjVals.length; idx++){
+               reduceVal.count += countObjVals[idx].count;
+               reduceVal.qty += countObjVals[idx].qty;
+   }
+   return reduceVal;
+
+};
+
+We now add one more optional MapReduce function called “finalize.”
+Our reduceFunction2 computed the total number (quantity) and counted the items.
+
+Below we divide the total number (quantity – qty) by the count to get the average size of each order.
+
+var finalizeFunction2 = function (key, reducedVal) {
+   reducedVal.avg = reducedVal.qty/reducedVal.count;
+   return reducedVal;
+
+};
+
+And below this starts the MapReduce machinery again.
+We use “merge” as we include the results into the existing output document. Otherwise we would
+“overwrite” and wipe out data.
+
+db.skudata.mapReduce( mapFunction2,
+reduceFunction2, { out: { merge: "mapreduceexample2" },
+
+                       finalize: finalizeFunction2 }
+)
+
+     Mapreduce Example 3 (This is the simplest example).
+
+Implement the MAX example. Who has the highest salary?
+
+db.numdata.insertMany(
+[{personid : "person1", salary : 20000},
+{personid : "person2", salary: 50000},
+{personid : "person3", salary: 40000}])
+
+The above should be mapped to:
+{data : {personid : "person1", salary : 20000}}
+{data : {personid : "person2", salary : 50000}}
+{data : {personid : "person3", salary : 40000}}
+
+That is achieved by the mapping function below.
+
+The function does not take any arguments and generates pairs from the current JSON document.
+The predefined function emit() sends the pairs out. The object this refers to the current JSON document
+and all of them are processed.
+
+var mapFunction3 = function() {
+ emit("data", this);
+ };
+
+arrayOfPersons = [] // I should not need that. But I think it helped.
+
+Codes is written JavaScript
+
+var reduceFunction3 = function(data, arrayOfPersons) {
+ maxPair = {person: "none", max : 0};
+ for (var idx = 0; idx < arrayOfPersons.length; idx++) {
+
+   if (arrayOfPersons[idx].salary > maxPair.max)
+      {maxPair.max = arrayOfPersons[idx].salary;
+      maxPair.person = arrayOfPersons[idx].personid;}
+
+ }
+return maxPair;
+};
+
+Now we are starting the whole MapReduce process, with our own
+Map function, our own Reduce function and a document that describes
+where we want the output to go (and how it should be processed).
+
+We create a new collection called “findmax”.
+
+db.numdata.mapReduce( mapFunction3,
+                                reduceFunction3,
+                               {out: "findmax" }
+
+)
+
+     COMPARISON AND LOGICAL OPERATORS
+A simple comparison operation does not look the way you may expect.
+Note that the $lt is between Rank and 2. This is an “infix operator” if you ignore the { }
+db.cafes.find( { Rank: { $lt: 2 }});
+This means
+WHERE Rank < 2
+But OR is a prefix operation:
+db.cafes.find( {$or: [ {Rank: 2}, {Rank: {$gt: 2}} ] } )
+And note that keys are case sensitive, even if they are not in quotes.
+
+     NOW WE WANT TO WORK WITH A REAL, BIG DATA SET
+
+Go to (below) to download the customers data set.
+
+https://www.dropbox.com/s/f0crtay1kb7zhe1/Customers.json?dl=0
+
+It will complain that it is too large to open, but eventually I was able to download it.
+(You might need a free Dropbox account…. Not sure. I have one.)
+Import the collection.
+Import in JSON Format.
+
++Click on
+
+Navigate to the place where you saved the download file. (Better to move it into a different
+directory than Download.)
+
+Click Next (as often as needed)
+Click Start Import
+Now do this:
+db.Customers.find({})
+This shows 3725 rows of data. Presumably the whole database.
+db.Customers.find({}).limit(1)
+This shows 1 (the first) element. 74 rows.
+
+db.Customers.find({}).limit(2)
+shows 2 elements as expected.
+
+db.Customers.find({}).count()
+returns 70000
+
+db.Customers.find({“Name.Last Name” : “Johnston”},
+{“Name.First Name” : NumberInt(1),
+“Name.Last Name” : NumberInt(1)}
+Returns first name and last name for all Johnstons.
+
+The above shows the _id ALSO.
+To get rid of this, write:
+db.Customers.find({“Name.Last Name” : “Johnston”},
+{“Name.First Name” : NumberInt(1),
+“Name.Last Name” : NumberInt(1)
+“_id” : NumberInt(0)})
+
+Now we will sort all Johnston’s by first name.
+db.Customers.find({“Name.Last Name” : “Johnston”},
+{“Name.First Name” : NumberInt(1),
+“Name.Last Name” : NumberInt(1)
+“_id” : NumberInt(0})).sort({“Name.First Name” : NumberInt(1)})
+
